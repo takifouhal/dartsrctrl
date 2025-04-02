@@ -743,13 +743,36 @@ class _DartAstVisitor extends RecursiveAstVisitor<void> {
     final library = element.library;
     if (library == null) return '';
 
-    final libraryPath = library.source.uri.toString();
+    final libraryUri = library.source.uri;
+    final libraryPath = libraryUri.toString();
+
+    // Check if it's a known package from pubspec
     for (final package in parser.packages) {
-      if (libraryPath.contains('package:${package.name}/')) {
+      if (libraryPath.startsWith('package:${package.name}/')) {
         return package.name;
       }
     }
 
+    // Handle Dart SDK libraries
+    if (libraryUri.scheme == 'dart') {
+      // Return path like "dart/core", "dart/async"
+      return 'dart/${libraryUri.path}';
+    }
+
+    // Handle other package URIs not explicitly listed (e.g., transitive dependencies)
+    if (libraryUri.scheme == 'package') {
+      final parts = libraryUri.pathSegments;
+      if (parts.isNotEmpty) {
+        // Return path like "package/package_name"
+        return 'package/${parts.first}';
+      }
+    }
+
+    // Fallback for file URIs or unknown schemes - might indicate part of the main project
+    // or an unexpected structure. Return empty for now, letting the Python script
+    // potentially place it under the main module if it's not marked external,
+    // or handle it based on ParentID if external.
+    // Consider if a different fallback is needed based on testing.
     return '';
   }
 
