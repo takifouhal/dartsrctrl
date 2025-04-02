@@ -1,0 +1,35 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "fvm-flutter: pub get",
+            "type": "shell",
+            "command": "fvm flutter pub get",
+            "problemMatcher": [],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
+        },
+        {
+            "label": "fvm-dart: analyze",
+            "type": "shell",
+            "command": "fvm dart analyze",
+            "problemMatcher": [],
+            "group": "test"
+        },
+        {
+            "label": "fvm-dart: format",
+            "type": "shell",
+            "command": "fvm dart format .",
+            "problemMatcher": []
+        },
+        {
+            "label": "fvm-dart: test",
+            "type": "shell",
+            "command": "fvm dart test",
+            "problemMatcher": [],
+            "group": "test"
+        }
+    ]
+}
