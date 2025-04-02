@@ -181,6 +181,36 @@ class _DartAstVisitor extends RecursiveAstVisitor<void> {
 
   _DartAstVisitor(this.parser, this.filePath);
 
+  bool _isExternalElement(Element element) {
+    final library = element.library;
+    if (library == null) {
+      // In some edge cases, there's no library (e.g., synthetic elements).
+      // We'll treat these as not external.
+      return false;
+    }
+
+    // If it's in the Dart SDK, mark external
+    if (library.isInSdk) {
+      return true;
+    }
+
+    // If the parser recorded at least one package,
+    // treat any library that isn't the first package as external.
+    final mainPackageName = parser.packages.isNotEmpty ? parser.packages.first.name : null;
+    if (mainPackageName == null || mainPackageName.isEmpty) {
+      // If we don't have a main package name, treat everything except SDK as external
+      return !library.isInSdk;
+    }
+
+    final uriStr = library.source.uri.toString();
+    // If the library's URI doesn't contain "package:$mainPackageName/", mark it external
+    if (!uriStr.contains('package:$mainPackageName/')) {
+      return true;
+    }
+
+    return false;
+  }
+
   @override
   void visitCompilationUnit(CompilationUnit node) {
     // Process library
@@ -198,7 +228,7 @@ class _DartAstVisitor extends RecursiveAstVisitor<void> {
         line: 1,
         column: 1,
         signature: '',
-        external: false,
+        external: _isExternalElement(libraryElement),
         parentId: 0,
         libraryName: libraryElement.name,
         isPrivate: false,
@@ -230,7 +260,7 @@ class _DartAstVisitor extends RecursiveAstVisitor<void> {
         line: node.offset,
         column: 0,
         signature: _getClassSignature(classElement),
-        external: false,
+        external: _isExternalElement(classElement),
         parentId: libraryId,
         libraryName: libraryElement.name,
         isPrivate: classElement.name.startsWith('_'),
@@ -314,7 +344,7 @@ class _DartAstVisitor extends RecursiveAstVisitor<void> {
         line: node.offset,
         column: 0,
         signature: _getExecutableSignature(methodElement),
-        external: false,
+        external: _isExternalElement(methodElement),
         parentId: classId,
         libraryName: methodElement.library.name,
         isPrivate: methodElement.name.startsWith('_'),
@@ -349,7 +379,7 @@ class _DartAstVisitor extends RecursiveAstVisitor<void> {
         line: node.offset,
         column: 0,
         signature: _getExecutableSignature(functionElement),
-        external: false,
+        external: _isExternalElement(functionElement),
         parentId: libraryId,
         libraryName: libraryElement.name,
         isPrivate: functionElement.name.startsWith('_'),
@@ -382,7 +412,7 @@ class _DartAstVisitor extends RecursiveAstVisitor<void> {
           line: variable.offset,
           column: 0,
           signature: _getFieldSignature(variableElement),
-          external: false,
+          external: _isExternalElement(variableElement),
           parentId: classId,
           libraryName: variableElement.library.name,
           isPrivate: variableElement.name.startsWith('_'),
@@ -420,7 +450,7 @@ class _DartAstVisitor extends RecursiveAstVisitor<void> {
         line: node.offset,
         column: 0,
         signature: _getExecutableSignature(constructorElement),
-        external: false,
+        external: _isExternalElement(constructorElement),
         parentId: classId,
         libraryName: constructorElement.library.name,
         isPrivate: constructorElement.name.startsWith('_'),
@@ -452,7 +482,7 @@ class _DartAstVisitor extends RecursiveAstVisitor<void> {
         line: node.offset,
         column: 0,
         signature: _getMixinSignature(mixinElement),
-        external: false,
+        external: _isExternalElement(mixinElement),
         parentId: libraryId,
         libraryName: libraryElement.name,
         isPrivate: mixinElement.name.startsWith('_'),
@@ -501,7 +531,7 @@ class _DartAstVisitor extends RecursiveAstVisitor<void> {
         line: node.offset,
         column: 0,
         signature: _getExtensionSignature(extensionElement),
-        external: false,
+        external: _isExternalElement(extensionElement),
         parentId: libraryId,
         libraryName: libraryElement.name,
         isPrivate: extensionElement.name?.startsWith('_') ?? false,
@@ -548,7 +578,7 @@ class _DartAstVisitor extends RecursiveAstVisitor<void> {
         line: node.offset,
         column: 0,
         signature: _getEnumSignature(enumElement),
-        external: false,
+        external: _isExternalElement(enumElement),
         parentId: libraryId,
         libraryName: libraryElement.name,
         isPrivate: enumElement.name.startsWith('_'),
@@ -574,7 +604,7 @@ class _DartAstVisitor extends RecursiveAstVisitor<void> {
             line: constant.offset,
             column: 0,
             signature: '',
-            external: false,
+            external: _isExternalElement(constantElement),
             parentId: enumId,
             libraryName: libraryElement.name,
             isPrivate: false,
@@ -608,7 +638,7 @@ class _DartAstVisitor extends RecursiveAstVisitor<void> {
         line: node.offset,
         column: 0,
         signature: _getVariableSignature(variableElement),
-        external: false,
+        external: _isExternalElement(variableElement),
         parentId: libraryId,
         libraryName: libraryElement.name,
         isPrivate: variableElement.name.startsWith('_'),
