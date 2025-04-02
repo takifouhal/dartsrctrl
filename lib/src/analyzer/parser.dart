@@ -177,7 +177,6 @@ class DartParser {
 class _DartAstVisitor extends RecursiveAstVisitor<void> {
   final DartParser parser;
   final String filePath;
-  final Logger _logger = Logger('DartAstVisitor');
 
   _DartAstVisitor(this.parser, this.filePath);
 
@@ -196,7 +195,8 @@ class _DartAstVisitor extends RecursiveAstVisitor<void> {
 
     // If the parser recorded at least one package,
     // treat any library that isn't the first package as external.
-    final mainPackageName = parser.packages.isNotEmpty ? parser.packages.first.name : null;
+    final mainPackageName =
+        parser.packages.isNotEmpty ? parser.packages.first.name : null;
     if (mainPackageName == null || mainPackageName.isEmpty) {
       // If we don't have a main package name, treat everything except SDK as external
       return !library.isInSdk;
@@ -237,6 +237,29 @@ class _DartAstVisitor extends RecursiveAstVisitor<void> {
       );
 
       parser._addSymbol(librarySymbol);
+
+      // Add references for import directives
+      for (final directive in node.directives) {
+        if (directive is ImportDirective) {
+          final importElement = directive.element;
+          if (importElement != null) {
+            final importedLibrary = importElement.importedLibrary;
+            if (importedLibrary != null) {
+              final importedId = parser._getSymbolId(importedLibrary);
+              parser._addReference(
+                Reference(
+                  fromId: libraryId,
+                  toId: importedId,
+                  file: filePath,
+                  line: directive.offset,
+                  column: 0,
+                  refType: ReferenceType.import,
+                ),
+              );
+            }
+          }
+        }
+      }
     }
 
     super.visitCompilationUnit(node);
@@ -354,8 +377,35 @@ class _DartAstVisitor extends RecursiveAstVisitor<void> {
 
       parser._addSymbol(methodSymbol);
 
-      // Note: We're not adding override references here as the API has changed
-      // and we'd need to implement a different approach to find overridden methods
+      // Check for overridden methods
+      if (methodElement.hasOverride) {
+        // Find the parent class
+        final classElement = methodElement.enclosingElement;
+        if (classElement is ClassElement) {
+          // Check superclasses and implemented interfaces for methods with the same name
+          for (final type in [
+            ...classElement.interfaces,
+            if (classElement.supertype != null) classElement.supertype!,
+            ...classElement.mixins,
+          ]) {
+            final overriddenMethod = type.element.getMethod(methodElement.name);
+            if (overriddenMethod != null) {
+              final baseMethodId = parser._getSymbolId(overriddenMethod);
+              parser._addReference(
+                Reference(
+                  fromId: methodId,
+                  toId: baseMethodId,
+                  file: filePath,
+                  line: node.offset,
+                  column: 0,
+                  refType: ReferenceType.override,
+                ),
+              );
+              break; // Just add the first reference we find
+            }
+          }
+        }
+      }
     }
 
     super.visitMethodDeclaration(node);
@@ -789,51 +839,6 @@ class _DartAstVisitor extends RecursiveAstVisitor<void> {
     }
 
     buffer.write(element.name);
-    return buffer.toString();
-  }
-
-  String _getConstructorSignature(ConstructorElement element) {
-    final buffer = StringBuffer();
-
-    buffer.write('${element.enclosingElement.name}');
-
-    if (element.name.isNotEmpty) {
-      buffer.write('.${element.name}');
-    }
-
-    buffer.write('(');
-
-    final params = element.parameters;
-    if (params.isNotEmpty) {
-      buffer.write(params.map((p) {
-        final paramStr = StringBuffer();
-        if (p.isNamed) {
-          paramStr.write('{');
-        } else if (p.isOptionalPositional) {
-          paramStr.write('[');
-        }
-
-        if (p.type.toString() != 'dynamic') {
-          paramStr.write('${p.type} ');
-        }
-
-        paramStr.write(p.name);
-
-        if (p.defaultValueCode != null) {
-          paramStr.write(' = ${p.defaultValueCode}');
-        }
-
-        if (p.isNamed) {
-          paramStr.write('}');
-        } else if (p.isOptionalPositional) {
-          paramStr.write(']');
-        }
-
-        return paramStr.toString();
-      }).join(', '));
-    }
-
-    buffer.write(')');
     return buffer.toString();
   }
 
